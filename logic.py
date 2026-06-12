@@ -126,6 +126,8 @@ def discover_repos() -> list[str]:
     repos = _candidate_repos()
     if CONFIG.sort in ("oldest", "newest"):
         repos.sort(key=_last_commit_epoch, reverse=CONFIG.sort == "newest")
+    else:
+        repos.sort(key=lambda r: Path(r).name)
     return repos
 
 
