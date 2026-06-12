@@ -296,7 +296,7 @@ def _build_menu(app: rumps.App) -> None:
         rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
     )
     app.menu.add(rumps.MenuItem("Refresh now", callback=app._on_refresh))
-    app.menu.add(rumps.MenuItem("Pull & restart", callback=_on_pull_restart))
+    app.menu.add(rumps.MenuItem("Pull (update)", callback=_on_pull_update))
     app.menu.add(rumps.MenuItem("Quit", callback=rumps.quit_application))
 
 
@@ -304,14 +304,12 @@ def _on_repo_click(repo: str, _: rumps.MenuItem) -> None:
     open_in_cmux(repo)
 
 
-def _on_pull_restart(_: rumps.MenuItem) -> None:
-    """Pull the latest repo-glance code and restart the app.
+def _on_pull_update(_: rumps.MenuItem) -> None:
+    """Pull the latest repo-glance code; this serves as a software update.
 
-    A full restart (rather than a reload) is needed because a pull can
-    change main.py, which only takes effect in a new process. The restart
-    spawns a fresh process and quits this one: exec-ing in place would
-    reuse the PID, leaving the new NSApplication with a stale window-server
-    registration and a dead status item.
+    No restart or explicit refresh needed: the pull changes this file's
+    mtime, which trips the fingerprint, so the next tick hot-reloads the
+    new code. Only changes to main.py still require a manual restart.
     """
     app_repo = Path(__file__).resolve().parent
     result = subprocess.run(
@@ -324,12 +322,6 @@ def _on_pull_restart(_: rumps.MenuItem) -> None:
             "repo-glance update failed",
             result.stderr.strip() or result.stdout.strip(),
         )
-        return
-    subprocess.Popen(
-        [sys.executable, str(app_repo / "main.py"), *sys.argv[1:]],
-        start_new_session=True,
-    )
-    rumps.quit_application()
 
 
 def _header() -> str:
