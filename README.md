@@ -57,17 +57,21 @@ The menu bar shows a short title (default `PM`); click it to see the per-repo st
 
 ### Hot reload
 
-`main.py` is a thin launcher; all app logic lives in `logic.py`, which is reloaded on every refresh. Edits to `logic.py` take effect on the next refresh (or "Refresh now") without restarting the app — only changes to `main.py` itself need a restart. If you save `logic.py` with an error in it, the app keeps running the last good version and logs the error to stderr.
+`main.py` is a thin launcher; all app logic lives in `logic.py`, which is reloaded on every tick (~2 s). Edits to `logic.py` take effect within seconds without restarting the app — only changes to `main.py` itself need a restart. If you save `logic.py` with an error in it, the app keeps running the last good version and logs the error to stderr.
+
+### Change detection
+
+The app ticks every 2 seconds, but each tick only stats a handful of files — the config file and each repo's `.git/HEAD`, `.git/index`, `.git/packed-refs`, and `.git/logs/HEAD`. A full refresh (git commands, menu rebuild) runs only when one of those changed, so commits, branch switches, staging, pulls, and config edits show up within ~2 s. Unstaged working-tree edits don't touch those files; they're picked up by the unconditional full refresh every `refresh_seconds`.
 
 ## Configuration
 
-On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. The file is **re-read on every refresh**, so edits (including the menu title and refresh interval) take effect on the next refresh — no restart needed.
+On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. Changes to the file are **detected within ~2 s**, so edits (including the menu title and refresh interval) take effect almost immediately — no restart needed.
 
 | Key | Default | Description |
 | --- | --- | --- |
 | `scan_dirs` | `["~/dev", "~/dev2"]` | Folders to scan. `~` and `$ENV_VARS` are expanded. |
 | `repo_pattern` | `"playmaker\\d*"` | A regex **string**, or a **list** of regexes. A directory is shown if its name *fully* matches any of them. |
-| `refresh_seconds` | `60` | How often the status refreshes. |
+| `refresh_seconds` | `60` | Seconds between unconditional full refreshes. Git and config changes are detected within ~2 s regardless; this backstop also catches unstaged working-tree edits. |
 | `title` | `"RG"` | The menu-bar title. |
 | `sort` | `"name"` | Listing order: `"name"` (grouped by scan dir), `"oldest"` (oldest last commit first), or `"newest"` (most recent first). |
 

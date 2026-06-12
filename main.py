@@ -1,9 +1,9 @@
 """Thin launcher for repo-glance.
 
 Owns only what cannot be recreated at runtime: the Cocoa event loop, the
-menu-bar item, and the refresh timer. Everything else lives in logic.py,
-which is reloaded on every refresh — so code edits take effect on the next
-tick without restarting the app. Only changes to THIS file need a restart.
+menu-bar item, and the tick timer. Everything else lives in logic.py,
+which is reloaded on every tick — so code edits take effect within seconds
+without restarting the app. Only changes to THIS file need a restart.
 
 Never `from logic import ...` here: that would pin references to old code.
 Always go through the `logic` module attribute so reloads take effect.
@@ -35,11 +35,12 @@ class PlaymakerStatusApp(rumps.App):
     def __init__(self, also_print: bool = True) -> None:
         super().__init__("RG", quit_button=None)
         self._also_print = also_print
-        self._timer = rumps.Timer(self._on_tick, 60)
+        self._timer = rumps.Timer(self._on_tick, logic.TICK_SECONDS)
         self._refresh()
         self._timer.start()
 
     def _refresh(self) -> None:
+        """Unconditional full refresh (startup and the Refresh-now menu item)."""
         _reload_logic()
         try:
             logic.refresh(self, also_print=self._also_print)
@@ -48,18 +49,24 @@ class PlaymakerStatusApp(rumps.App):
             traceback.print_exc()
 
     def _on_tick(self, _: rumps.Timer) -> None:
-        self._refresh()
+        _reload_logic()
+        try:
+            logic.tick(self, also_print=self._also_print)
+        except Exception:
+            print("repo-glance: tick failed:", file=sys.stderr)
+            traceback.print_exc()
 
     def _on_refresh(self, _: rumps.MenuItem) -> None:
         self._refresh()
 
 
 def cli_loop() -> None:
+    state: dict = {}
     try:
         while True:
             _reload_logic()
             try:
-                interval = logic.cli_tick()
+                interval = logic.cli_tick(state)
             except Exception:
                 print("repo-glance: refresh failed:", file=sys.stderr)
                 traceback.print_exc()

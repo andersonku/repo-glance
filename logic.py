@@ -1,4 +1,4 @@
-"""All app logic for repo-glance. Reloaded by main.py on every refresh,
+"""All app logic for repo-glance. Reloaded by main.py on every tick,
 so edits to this file take effect without restarting the app."""
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import tomllib
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -19,6 +20,10 @@ from AppKit import NSAttributedString, NSFont, NSFontAttributeName
 
 CONFIG_PATH = Path.home() / ".config" / "repo-glance" / "config.toml"
 
+# How often the launcher ticks. Each tick is a cheap stat-based change check;
+# a full refresh runs only on change or every refresh_seconds.
+TICK_SECONDS = 2
+
 DEFAULTS = {
     "scan_dirs": ["~/dev", "~/dev2"],
     "repo_pattern": r"playmaker\d*",
@@ -28,7 +33,7 @@ DEFAULTS = {
 }
 
 SAMPLE_CONFIG = r'''# repo-glance configuration.
-# Changes are picked up on the next refresh — no restart needed.
+# Changes are picked up within a couple of seconds — no restart needed.
 
 # Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
 scan_dirs = ["~/dev", "~/dev2"]
@@ -37,7 +42,9 @@ scan_dirs = ["~/dev", "~/dev2"]
 # A single string also works: repo_pattern = "playmaker\\d*"
 repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
 
-# Refresh interval, in seconds.
+# Seconds between unconditional full refreshes. Git changes (commits, branch
+# switches, staging) and config edits are detected within ~2s regardless; this
+# interval is the backstop that also catches unstaged working-tree edits.
 refresh_seconds = 60
 
 # Menu-bar title.
@@ -101,8 +108,9 @@ def _last_commit_epoch(repo: str) -> int:
     return int(out) if out.isdigit() else 0
 
 
-def discover_repos() -> list[str]:
-    """Scan the configured dirs for repos whose name matches the configured pattern."""
+def _candidate_repos() -> list[str]:
+    """Scan the configured dirs for repos whose name matches the configured
+    pattern. Stat-only (no git calls), so it is cheap enough to run every tick."""
     repos: list[str] = []
     for root in CONFIG.scan_dirs:
         if not root.is_dir():
@@ -111,9 +119,39 @@ def discover_repos() -> list[str]:
             p for p in root.iterdir() if p.is_dir() and CONFIG.repo_pattern.match(p.name)
         ]
         repos.extend(str(p) for p in sorted(matches, key=lambda p: p.name))
+    return repos
+
+
+def discover_repos() -> list[str]:
+    repos = _candidate_repos()
     if CONFIG.sort in ("oldest", "newest"):
         repos.sort(key=_last_commit_epoch, reverse=CONFIG.sort == "newest")
     return repos
+
+
+# Files whose mtime reflects the git state we display: HEAD and logs/HEAD for
+# branch switches and commits, index for staging, packed-refs for gc/fetch.
+_FINGERPRINT_GIT_FILES = ("HEAD", "index", "packed-refs", "logs/HEAD")
+
+
+def _mtime(path: Path) -> int | None:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _fingerprint() -> tuple:
+    """Stat-based snapshot of everything that should trigger a refresh: this
+    file (hot reload), the config file, and each repo's git state. Unstaged
+    working-tree edits don't touch any of these — the periodic full refresh
+    picks those up."""
+    entries: list = [_mtime(Path(__file__)), _mtime(CONFIG_PATH)]
+    for repo in _candidate_repos():
+        entries.append(repo)
+        git_dir = Path(repo, ".git")
+        entries.extend(_mtime(git_dir / name) for name in _FINGERPRINT_GIT_FILES)
+    return tuple(entries)
 
 
 CMUX_BIN = "/Applications/cmux.app/Contents/Resources/bin/cmux"
@@ -213,19 +251,33 @@ def _mono_item(text: str, callback=None) -> rumps.MenuItem:
     return item
 
 
+def tick(app: rumps.App, also_print: bool) -> None:
+    """Called by the launcher every TICK_SECONDS, after this module has been
+    reloaded. Runs a full refresh only when the fingerprint changed or
+    refresh_seconds has elapsed since the last one."""
+    if _fingerprint() == getattr(app, "_rg_fingerprint", None) and (
+        time.monotonic() - getattr(app, "_rg_last_refresh", 0.0)
+        < CONFIG.refresh_seconds
+    ):
+        return
+    refresh(app, also_print)
+
+
 def refresh(app: rumps.App, also_print: bool) -> None:
     """Reload config, update the menu-bar app, and optionally print the CLI table.
 
-    Called by the launcher on every tick, after this module has been reloaded.
+    Unconditional — used at startup, by the Refresh-now menu item, and by
+    tick() when a change is detected.
     """
     global CONFIG
     CONFIG = load_config()
     app.title = CONFIG.title
-    if app._timer.interval != CONFIG.refresh_seconds:
-        app._timer.stop()
-        app._timer.interval = CONFIG.refresh_seconds
-        app._timer.start()
     _build_menu(app)
+    # Snapshot AFTER the git calls above: `git status` may itself rewrite
+    # .git/index, which must not register as a new change on the next tick.
+    # State lives on the app object because module globals are wiped by reload.
+    app._rg_fingerprint = _fingerprint()
+    app._rg_last_refresh = time.monotonic()
     if also_print:
         _print_cli_table(CONFIG.refresh_seconds)
 
@@ -298,14 +350,22 @@ def _print_cli_table(interval: int = CONFIG.refresh_seconds) -> None:
     print()
     print(
         f"Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  "
-        f"(refreshing every {interval}s — Ctrl-C to exit)"
+        f"(refresh on change, full refresh every {interval}s — Ctrl-C to exit)"
     )
     sys.stdout.flush()
 
 
-def cli_tick() -> int:
-    """Reload config and print the CLI table once; return the refresh interval."""
+def cli_tick(state: dict) -> int:
+    """Print the CLI table when something changed or refresh_seconds elapsed;
+    return the seconds to sleep. `state` is owned by the launcher so it
+    survives reloads of this module."""
     global CONFIG
     CONFIG = load_config()
-    _print_cli_table(CONFIG.refresh_seconds)
-    return CONFIG.refresh_seconds
+    if _fingerprint() != state.get("fingerprint") or (
+        time.monotonic() - state.get("last_refresh", 0.0) >= CONFIG.refresh_seconds
+    ):
+        _print_cli_table(CONFIG.refresh_seconds)
+        # Snapshot after printing: the git calls may rewrite .git/index.
+        state["fingerprint"] = _fingerprint()
+        state["last_refresh"] = time.monotonic()
+    return TICK_SECONDS
