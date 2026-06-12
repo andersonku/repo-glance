@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -30,6 +31,7 @@ DEFAULTS = {
     "refresh_seconds": 60,
     "title": "RG",
     "sort": "name",
+    "active_days": 30,
 }
 
 SAMPLE_CONFIG = r'''# repo-glance configuration.
@@ -63,6 +65,7 @@ class Config:
     refresh_seconds: int
     title: str
     sort: str
+    active_days: int
 
 
 def _write_sample_config() -> None:
@@ -97,20 +100,25 @@ def load_config() -> Config:
         refresh_seconds=int(raw["refresh_seconds"]),
         title=str(raw["title"]),
         sort=str(raw["sort"]),
+        active_days=int(raw["active_days"]),
     )
 
 
 CONFIG = load_config()
 
 
-def _last_commit_epoch(repo: str) -> int:
-    out = _git(repo, "log", "-1", "--format=%ct")
-    return int(out) if out.isdigit() else 0
+@dataclass
+class RepoInfo:
+    repo: str
+    branch: str
+    epoch: int
+    last_iso: str
+    uncommitted: int
+    is_git: bool
 
 
 def _candidate_repos() -> list[str]:
-    """Scan the configured dirs for repos whose name matches the configured
-    pattern. Stat-only (no git calls), so it is cheap enough to run every tick."""
+    """Scan configured dirs for repos matching the pattern. Stat-only, no git calls."""
     repos: list[str] = []
     for root in CONFIG.scan_dirs:
         if not root.is_dir():
@@ -122,13 +130,35 @@ def _candidate_repos() -> list[str]:
     return repos
 
 
-def discover_repos() -> list[str]:
-    repos = _candidate_repos()
-    if CONFIG.sort in ("oldest", "newest"):
-        repos.sort(key=_last_commit_epoch, reverse=CONFIG.sort == "newest")
+def _fetch_repo_info(repo: str) -> RepoInfo:
+    """Fetch all display data for one repo in 3 git calls (was 4, epoch+date combined)."""
+    if not Path(repo, ".git").exists():
+        return RepoInfo(repo=repo, branch="", epoch=0, last_iso="", uncommitted=0, is_git=False)
+    log_out = _git(repo, "log", "-1", "--format=%ct\n%cd", "--date=short")
+    lines = log_out.splitlines()
+    epoch = int(lines[0]) if lines and lines[0].isdigit() else 0
+    last_iso = lines[1] if len(lines) > 1 else ""
+    branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    porcelain = _git(repo, "status", "--porcelain")
+    uncommitted = len(porcelain.splitlines()) if porcelain else 0
+    return RepoInfo(repo=repo, branch=branch, epoch=epoch, last_iso=last_iso,
+                    uncommitted=uncommitted, is_git=True)
+
+
+def discover_repos() -> list[RepoInfo]:
+    candidates = _candidate_repos()
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        infos = list(ex.map(_fetch_repo_info, candidates))
+    if CONFIG.active_days > 0:
+        cutoff = time.time() - CONFIG.active_days * 86400
+        infos = [i for i in infos if i.epoch >= cutoff]
+    if CONFIG.sort == "newest":
+        infos.sort(key=lambda i: i.epoch, reverse=True)
+    elif CONFIG.sort == "oldest":
+        infos.sort(key=lambda i: i.epoch)
     else:
-        repos.sort(key=lambda r: Path(r).name)
-    return repos
+        infos.sort(key=lambda i: Path(i.repo).name)
+    return infos
 
 
 # Files whose mtime reflects the git state we display: HEAD and logs/HEAD for
@@ -202,10 +232,10 @@ def open_in_cmux(repo: str) -> None:
     subprocess.run(["open", "-b", CMUX_BUNDLE_ID], capture_output=True)
 
 
-BRANCH_MAX = 40
+BRANCH_MAX = 25
 
 BRANCH_W = BRANCH_MAX
-LAST_W = 12
+LAST_W = 7
 COUNT_W = 3
 
 _MONO_FONT = NSFont.monospacedSystemFontOfSize_weight_(13.0, 0.0)
@@ -224,31 +254,27 @@ def _relative_days(iso_date: str) -> str:
     days = (date.today() - date.fromisoformat(iso_date)).days
     if days <= 0:
         return "Today"
-    if days == 1:
-        return "1 day ago"
-    return f"{days} days ago"
+    return f"{days}d"
 
 
-def _name_width(repos: list[str]) -> int:
-    return max((len(Path(r).name) for r in repos), default=12)
+def _name_width(infos: list[RepoInfo]) -> int:
+    return max((len(Path(i.repo).name) for i in infos), default=12)
 
 
-def repo_summary(repo: str, name_w: int = 12) -> str:
-    name = Path(repo).name
-    if not Path(repo, ".git").exists():
+def repo_summary(info: RepoInfo, name_w: int = 12) -> str:
+    name = Path(info.repo).name
+    if not info.is_git:
         return f"{name:<{name_w}}  (not a git repo)"
-    branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = info.branch
     if len(branch) > BRANCH_MAX:
         branch = branch[: BRANCH_MAX - 3] + "..."
-    last_iso = _git(repo, "log", "-1", "--format=%cd", "--date=short")
-    last = _relative_days(last_iso) if last_iso else "-"
-    porcelain = _git(repo, "status", "--porcelain")
-    uncommitted = len(porcelain.splitlines()) if porcelain else 0
+    last = _relative_days(info.last_iso) if info.last_iso else "-"
+    dirty = f"{info.uncommitted:>{COUNT_W}} !" if info.uncommitted else ""
     return (
         f"{name:<{name_w}}  "
         f"{branch:<{BRANCH_W}}  "
         f"{last:<{LAST_W}}  "
-        f"{uncommitted:>{COUNT_W}} uncommitted"
+        f"{dirty}"
     )
 
 
@@ -294,13 +320,13 @@ def refresh(app: rumps.App, also_print: bool) -> None:
 
 def _build_menu(app: rumps.App) -> None:
     app.menu.clear()
-    repos = discover_repos()
-    name_w = _name_width(repos)
-    for repo in repos:
+    infos = discover_repos()
+    name_w = _name_width(infos)
+    for info in infos:
         app.menu.add(
             _mono_item(
-                repo_summary(repo, name_w),
-                callback=functools.partial(_on_repo_click, repo),
+                repo_summary(info, name_w),
+                callback=functools.partial(_on_repo_click, info.repo),
             )
         )
     app.menu.add(rumps.separator)
@@ -340,19 +366,19 @@ def _header(name_w: int = 12) -> str:
     return (
         f"{'REPO':<{name_w}}  "
         f"{'BRANCH':<{BRANCH_W}}  "
-        f"{'LAST COMMIT':<{LAST_W}}  "
-        f"UNCOMMITTED"
+        f"{'AGE':<{LAST_W}}  "
+        f"DIRTY"
     )
 
 
 def _print_cli_table(interval: int = CONFIG.refresh_seconds) -> None:
-    repos = discover_repos()
-    name_w = _name_width(repos)
+    infos = discover_repos()
+    name_w = _name_width(infos)
     print("\033[2J\033[H", end="")
     print(_header(name_w))
     print("-" * len(_header(name_w)))
-    for repo in repos:
-        print(repo_summary(repo, name_w))
+    for info in infos:
+        print(repo_summary(info, name_w))
     print()
     print(
         f"Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  "
