@@ -17,7 +17,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import rumps
-from AppKit import NSAttributedString, NSFont, NSFontAttributeName
+from AppKit import NSAttributedString, NSFont, NSFontAttributeName, NSImage
 
 CONFIG_PATH = Path.home() / ".config" / "repo-glance" / "config.toml"
 
@@ -33,6 +33,7 @@ DEFAULTS = {
     "sort": "name",
     "active_days": 30,
     "branch_width": 25,
+    "icon": "",
 }
 
 # Comment block above each key — used for the sample config and for the
@@ -58,6 +59,10 @@ KEY_COMMENTS = {
     ),
     "branch_width": (
         '# Branch column width; longer branch names are truncated with "...".'
+    ),
+    "icon": (
+        "# Path to a .png/.svg file shown as the menu-bar icon instead of the title\n"
+        '# text. "~" and $ENV_VARS are expanded; empty shows the title text.'
     ),
 }
 
@@ -88,6 +93,7 @@ class Config:
     sort: str
     active_days: int
     branch_width: int
+    icon: str
 
 
 def _write_sample_config() -> None:
@@ -139,6 +145,7 @@ def load_config() -> Config:
         sort=str(raw["sort"]),
         active_days=int(raw["active_days"]),
         branch_width=int(raw["branch_width"]),
+        icon=os.path.expandvars(os.path.expanduser(str(raw["icon"]))),
     )
 
 
@@ -335,6 +342,32 @@ def tick(app: rumps.App, also_print: bool) -> None:
     refresh(app, also_print)
 
 
+ICON_HEIGHT = 18  # standard menu-bar icon height in points
+
+
+def _set_status_icon(app: rumps.App, path: str) -> bool:
+    """Set the menu-bar icon, preserving aspect ratio and enabling template
+    mode (so macOS recolors it for dark menu bars and the highlighted state).
+
+    rumps' own `app.icon` setter forces every image to 20x20, distorting
+    non-square icons, so build the NSImage here and hand it to the same
+    internals the setter uses. Returns False if the image can't be loaded.
+    """
+    img = NSImage.alloc().initByReferencingFile_(path)
+    if img is None or not img.isValid():
+        return False
+    size = img.size()
+    img.setSize_((size.width * ICON_HEIGHT / size.height, ICON_HEIGHT))
+    img.setTemplate_(True)
+    app._icon = path
+    app._icon_nsimage = img
+    try:
+        app._nsapp.setStatusBarIcon()
+    except AttributeError:
+        pass
+    return True
+
+
 def refresh(app: rumps.App, also_print: bool) -> None:
     """Reload config, update the menu-bar app, and optionally print the CLI table.
 
@@ -343,7 +376,13 @@ def refresh(app: rumps.App, also_print: bool) -> None:
     """
     global CONFIG
     CONFIG = load_config()
-    app.title = CONFIG.title
+    if CONFIG.icon and Path(CONFIG.icon).is_file() and _set_status_icon(
+        app, CONFIG.icon
+    ):
+        app.title = None
+    else:
+        app.icon = None
+        app.title = CONFIG.title
     _build_menu(app)
     # Snapshot AFTER the git calls above: `git status` may itself rewrite
     # .git/index, which must not register as a new change on the next tick.

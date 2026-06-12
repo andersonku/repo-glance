@@ -17,6 +17,7 @@ import time
 import traceback
 
 import rumps
+from Foundation import NSUserDefaults
 
 import logic
 
@@ -33,6 +34,12 @@ def _reload_logic() -> None:
 
 class PlaymakerStatusApp(rumps.App):
     def __init__(self, also_print: bool = True) -> None:
+        # Pin the status item to the rightmost third-party slot. macOS reads
+        # this preference (distance from the screen's right edge, autosave
+        # name "Item-0") when the status item is created in run().
+        NSUserDefaults.standardUserDefaults().setObject_forKey_(
+            1, "NSStatusItem Preferred Position Item-0"
+        )
         super().__init__("RG", quit_button=None)
         self._also_print = also_print
         self._timer = rumps.Timer(self._on_tick, logic.TICK_SECONDS)
