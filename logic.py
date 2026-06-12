@@ -308,6 +308,7 @@ def _build_menu(app: rumps.App) -> None:
         rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
     )
     app.menu.add(rumps.MenuItem("Refresh now", callback=app._on_refresh))
+    app.menu.add(rumps.MenuItem("Edit config", callback=_on_edit_config))
     behind = _commits_behind(app)
     gh_title = f"Open GitHub ({behind} behind)" if behind else "Open GitHub"
     app.menu.add(rumps.MenuItem(gh_title, callback=_on_open_github))
@@ -346,6 +347,12 @@ def _commits_behind(app: rumps.App) -> int:
 
 def _on_open_github(_: rumps.MenuItem) -> None:
     subprocess.run(["open", GITHUB_URL], capture_output=True)
+
+
+def _on_edit_config(_: rumps.MenuItem) -> None:
+    if not CONFIG_PATH.exists():
+        _write_sample_config()
+    subprocess.run(["open", "-t", str(CONFIG_PATH)], capture_output=True)
 
 
 def _on_pull_update(_: rumps.MenuItem) -> None:
