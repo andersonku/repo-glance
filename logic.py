@@ -303,12 +303,44 @@ def _build_menu(app: rumps.App) -> None:
         rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
     )
     app.menu.add(rumps.MenuItem("Refresh now", callback=app._on_refresh))
+    behind = _commits_behind(app)
+    gh_title = f"Open GitHub ({behind} behind)" if behind else "Open GitHub"
+    app.menu.add(rumps.MenuItem(gh_title, callback=_on_open_github))
     app.menu.add(rumps.MenuItem("Pull (update)", callback=_on_pull_update))
     app.menu.add(rumps.MenuItem("Quit", callback=rumps.quit_application))
 
 
 def _on_repo_click(repo: str, _: rumps.MenuItem) -> None:
     open_in_cmux(repo)
+
+
+GITHUB_URL = "https://github.com/andersonku/repo-glance"
+FETCH_SECONDS = 300  # at most one network fetch per this many seconds
+
+
+def _commits_behind(app: rumps.App) -> int:
+    """How many commits this checkout is behind upstream. The fetch is
+    rate-limited (timestamp lives on the app object so it survives reloads);
+    the rev-list itself is local and runs every refresh, so the count
+    self-corrects right after a pull."""
+    app_repo = str(Path(__file__).resolve().parent)
+    last = getattr(app, "_rg_last_fetch", None)
+    if last is None or time.monotonic() - last >= FETCH_SECONDS:
+        try:
+            subprocess.run(
+                ["git", "-C", app_repo, "fetch", "--quiet"],
+                capture_output=True,
+                timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            pass
+        app._rg_last_fetch = time.monotonic()
+    out = _git(app_repo, "rev-list", "--count", "HEAD..@{u}")
+    return int(out) if out.isdigit() else 0
+
+
+def _on_open_github(_: rumps.MenuItem) -> None:
+    subprocess.run(["open", GITHUB_URL], capture_output=True)
 
 
 def _on_pull_update(_: rumps.MenuItem) -> None:
