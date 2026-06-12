@@ -1,4 +1,4 @@
-"""Menu bar app showing status of each playmaker checkout."""
+"""Menu bar app showing the git status of your local repo checkouts."""
 
 from __future__ import annotations
 
@@ -17,16 +17,16 @@ from pathlib import Path
 import rumps
 from AppKit import NSAttributedString, NSFont, NSFontAttributeName
 
-CONFIG_PATH = Path.home() / ".config" / "playmaker-status" / "config.toml"
+CONFIG_PATH = Path.home() / ".config" / "repo-glance" / "config.toml"
 
 DEFAULTS = {
     "scan_dirs": ["~/dev", "~/dev2"],
     "repo_pattern": r"playmaker\d*",
     "refresh_seconds": 60,
-    "title": "PM",
+    "title": "RG",
 }
 
-SAMPLE_CONFIG = r'''# playmaker-status configuration.
+SAMPLE_CONFIG = r'''# repo-glance configuration.
 # Restart the app after editing.
 
 # Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
@@ -40,7 +40,7 @@ repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
 refresh_seconds = 60
 
 # Menu-bar title.
-title = "PM"
+title = "RG"
 '''
 
 
@@ -68,7 +68,7 @@ def load_config() -> Config:
             with CONFIG_PATH.open("rb") as f:
                 raw.update(tomllib.load(f))
         except (OSError, tomllib.TOMLDecodeError) as exc:
-            print(f"playmaker-status: ignoring bad config: {exc}", file=sys.stderr)
+            print(f"repo-glance: ignoring bad config: {exc}", file=sys.stderr)
     else:
         _write_sample_config()
     scan_dirs = [

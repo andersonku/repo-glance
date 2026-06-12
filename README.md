@@ -1,10 +1,10 @@
-# playmaker-status
+# repo-glance
 
 A macOS menu-bar app that shows the git status of each of your local repo checkouts at a glance — current branch, how long since the last commit, and the number of uncommitted changes. Click a repo to jump to its [cmux](https://cmux.com) workspace.
 
 It discovers repos by scanning folders you configure (e.g. `~/dev`, `~/dev2`) for directory names matching one or more regexes (e.g. `playmaker\d*`, `fastbreak\d*`).
 
-![playmaker-status menu-bar dropdown](docs/screenshot.png)
+![repo-glance menu-bar dropdown](docs/screenshot.png)
 
 ---
 
@@ -13,14 +13,14 @@ It discovers repos by scanning folders you configure (e.g. `~/dev`, `~/dev2`) fo
 Paste this into an agent (e.g. Claude Code) running in a terminal on your Mac:
 
 ```
-Install and configure the playmaker-status menu-bar app from this repo for me.
+Install and configure the repo-glance menu-bar app from this repo for me.
 
 1. Make sure `uv` is installed (https://docs.astral.sh/uv/). If not, install it.
 2. From the repo root, run `uv sync` to create the venv and install dependencies.
 3. Run `uv run main.py --cli` once to generate the default config at
-   ~/.config/playmaker-status/config.toml, then Ctrl-C to stop.
+   ~/.config/repo-glance/config.toml, then Ctrl-C to stop.
 4. Ask me which folders my repos live in and what naming pattern(s) they follow,
-   then edit ~/.config/playmaker-status/config.toml accordingly:
+   then edit ~/.config/repo-glance/config.toml accordingly:
      - scan_dirs: the folders to scan (supports ~ and $ENV_VARS)
      - repo_pattern: a regex string, or a list of regexes; a directory is shown
        if its name FULLY matches any of them
@@ -57,14 +57,14 @@ The menu bar shows a short title (default `PM`); click it to see the per-repo st
 
 ## Configuration
 
-On first run, a commented sample is written to `~/.config/playmaker-status/config.toml`. Edit it and **restart the app** to apply changes.
+On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. Edit it and **restart the app** to apply changes.
 
 | Key | Default | Description |
 | --- | --- | --- |
 | `scan_dirs` | `["~/dev", "~/dev2"]` | Folders to scan. `~` and `$ENV_VARS` are expanded. |
 | `repo_pattern` | `"playmaker\\d*"` | A regex **string**, or a **list** of regexes. A directory is shown if its name *fully* matches any of them. |
 | `refresh_seconds` | `60` | How often the status refreshes. |
-| `title` | `"PM"` | The menu-bar title. |
+| `title` | `"RG"` | The menu-bar title. |
 
 Example with multiple patterns:
 
@@ -72,7 +72,7 @@ Example with multiple patterns:
 scan_dirs = ["~/dev", "~/dev2", "~/work/$USER/projects"]
 repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
 refresh_seconds = 60
-title = "PM"
+title = "RG"
 ```
 
 Notes:
@@ -90,14 +90,14 @@ If cmux isn't installed, clicks simply do nothing — the rest of the app works 
 
 ## Run at login (optional)
 
-To keep the menu-bar app running across reboots, create a LaunchAgent. Save the following as `~/Library/LaunchAgents/com.user.playmaker-status.plist`, replacing `/ABSOLUTE/PATH/TO/playmaker-status` with this repo's path and the `uv` path with the output of `which uv`:
+To keep the menu-bar app running across reboots, create a LaunchAgent. Save the following as `~/Library/LaunchAgents/com.user.repo-glance.plist`, replacing `/ABSOLUTE/PATH/TO/repo-glance` with this repo's path and the `uv` path with the output of `which uv`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>            <string>com.user.playmaker-status</string>
+  <key>Label</key>            <string>com.user.repo-glance</string>
   <key>ProgramArguments</key>
   <array>
     <string>/ABSOLUTE/PATH/TO/uv</string>
@@ -105,7 +105,7 @@ To keep the menu-bar app running across reboots, create a LaunchAgent. Save the 
     <string>main.py</string>
     <string>--no-cli</string>
   </array>
-  <key>WorkingDirectory</key> <string>/ABSOLUTE/PATH/TO/playmaker-status</string>
+  <key>WorkingDirectory</key> <string>/ABSOLUTE/PATH/TO/repo-glance</string>
   <key>RunAtLoad</key>        <true/>
 </dict>
 </plist>
@@ -114,5 +114,5 @@ To keep the menu-bar app running across reboots, create a LaunchAgent. Save the 
 Then load it:
 
 ```sh
-launchctl load ~/Library/LaunchAgents/com.user.playmaker-status.plist
+launchctl load ~/Library/LaunchAgents/com.user.repo-glance.plist
 ```

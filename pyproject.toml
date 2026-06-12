@@ -1,7 +1,7 @@
 [project]
-name = "playmaker-status"
+name = "repo-glance"
 version = "0.1.0"
-description = "Add your description here"
+description = "A macOS menu-bar app showing the git status of your local repo checkouts."
 requires-python = ">=3.11"
 dependencies = [
     "rumps>=0.4.0",

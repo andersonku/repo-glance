@@ -3,17 +3,6 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
-name = "playmaker-status"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "rumps" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "rumps", specifier = ">=0.4.0" }]
-
-[[package]]
 name = "pyobjc-core"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -43,6 +32,17 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/59/bb/f777cc9e775fc7dae77b569254570fe46eb842516b3e4fe383ab49eab598/pyobjc_framework_cocoa-12.1-cp314-cp314-macosx_10_15_universal2.whl", hash = "sha256:03342a60fc0015bcdf9b93ac0b4f457d3938e9ef761b28df9564c91a14f0129a", size = 384932, upload-time = "2025-11-14T09:42:29.771Z" },
     { url = "https://files.pythonhosted.org/packages/58/27/b457b7b37089cad692c8aada90119162dfb4c4a16f513b79a8b2b022b33b/pyobjc_framework_cocoa-12.1-cp314-cp314t-macosx_10_15_universal2.whl", hash = "sha256:6ba1dc1bfa4da42d04e93d2363491275fb2e2be5c20790e561c8a9e09b8cf2cc", size = 388970, upload-time = "2025-11-14T09:42:53.964Z" },
 ]
+
+[[package]]
+name = "repo-glance"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "rumps" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "rumps", specifier = ">=0.4.0" }]
 
 [[package]]
 name = "rumps"
