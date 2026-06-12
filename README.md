@@ -55,6 +55,10 @@ uv run main.py           # run it
 
 The menu bar shows a short title (default `PM`); click it to see the per-repo status, a "Refresh now" item, and "Quit".
 
+### Hot reload
+
+`main.py` is a thin launcher; all app logic lives in `logic.py`, which is reloaded on every refresh. Edits to `logic.py` take effect on the next refresh (or "Refresh now") without restarting the app — only changes to `main.py` itself need a restart. If you save `logic.py` with an error in it, the app keeps running the last good version and logs the error to stderr.
+
 ## Configuration
 
 On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. The file is **re-read on every refresh**, so edits (including the menu title and refresh interval) take effect on the next refresh — no restart needed.
