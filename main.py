@@ -32,8 +32,9 @@ SAMPLE_CONFIG = r'''# playmaker-status configuration.
 # Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
 scan_dirs = ["~/dev", "~/dev2"]
 
-# A directory is shown only if its name FULLY matches this regex.
-repo_pattern = "playmaker\\d*"
+# A directory is shown if its name FULLY matches any of these regexes.
+# A single string also works: repo_pattern = "playmaker\\d*"
+repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
 
 # Refresh interval, in seconds.
 refresh_seconds = 60
@@ -73,9 +74,13 @@ def load_config() -> Config:
     scan_dirs = [
         Path(os.path.expandvars(os.path.expanduser(d))) for d in raw["scan_dirs"]
     ]
+    patterns = raw["repo_pattern"]
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    combined = "|".join(f"(?:{p})" for p in patterns)
     return Config(
         scan_dirs=scan_dirs,
-        repo_pattern=re.compile(f"^(?:{raw['repo_pattern']})$"),
+        repo_pattern=re.compile(f"^(?:{combined})$"),
         refresh_seconds=int(raw["refresh_seconds"]),
         title=str(raw["title"]),
     )
