@@ -53,7 +53,7 @@ uv run main.py           # run it
 | `uv run main.py --no-cli` | Menu-bar app only (no terminal output) — best for running in the background |
 | `uv run main.py --cli` | Terminal table only, no menu-bar icon (handy over SSH / for a first run) |
 
-The menu bar shows a short title (default `PM`); click it to see the per-repo status, a "Refresh now" item, and "Quit".
+The menu bar shows a short title (default `PM`); click it to see the per-repo status, a "Refresh now" item, "Pull & restart" (updates the app itself via `git pull` and relaunches), and "Quit".
 
 ### Hot reload
 

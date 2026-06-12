@@ -244,11 +244,40 @@ def _build_menu(app: rumps.App) -> None:
         rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
     )
     app.menu.add(rumps.MenuItem("Refresh now", callback=app._on_refresh))
+    app.menu.add(rumps.MenuItem("Pull & restart", callback=_on_pull_restart))
     app.menu.add(rumps.MenuItem("Quit", callback=rumps.quit_application))
 
 
 def _on_repo_click(repo: str, _: rumps.MenuItem) -> None:
     open_in_cmux(repo)
+
+
+def _on_pull_restart(_: rumps.MenuItem) -> None:
+    """Pull the latest repo-glance code and restart the app.
+
+    A full restart (rather than a reload) is needed because a pull can
+    change main.py, which only takes effect in a new process. The restart
+    spawns a fresh process and quits this one: exec-ing in place would
+    reuse the PID, leaving the new NSApplication with a stale window-server
+    registration and a dead status item.
+    """
+    app_repo = Path(__file__).resolve().parent
+    result = subprocess.run(
+        ["git", "-C", str(app_repo), "pull", "--ff-only"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        rumps.alert(
+            "repo-glance update failed",
+            result.stderr.strip() or result.stdout.strip(),
+        )
+        return
+    subprocess.Popen(
+        [sys.executable, str(app_repo / "main.py"), *sys.argv[1:]],
+        start_new_session=True,
+    )
+    rumps.quit_application()
 
 
 def _header() -> str:
