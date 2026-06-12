@@ -204,7 +204,6 @@ def open_in_cmux(repo: str) -> None:
 
 BRANCH_MAX = 40
 
-NAME_W = 12
 BRANCH_W = BRANCH_MAX
 LAST_W = 12
 COUNT_W = 3
@@ -230,10 +229,14 @@ def _relative_days(iso_date: str) -> str:
     return f"{days} days ago"
 
 
-def repo_summary(repo: str) -> str:
+def _name_width(repos: list[str]) -> int:
+    return max((len(Path(r).name) for r in repos), default=12)
+
+
+def repo_summary(repo: str, name_w: int = 12) -> str:
     name = Path(repo).name
     if not Path(repo, ".git").exists():
-        return f"{name:<{NAME_W}}  (not a git repo)"
+        return f"{name:<{name_w}}  (not a git repo)"
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     if len(branch) > BRANCH_MAX:
         branch = branch[: BRANCH_MAX - 3] + "..."
@@ -242,7 +245,7 @@ def repo_summary(repo: str) -> str:
     porcelain = _git(repo, "status", "--porcelain")
     uncommitted = len(porcelain.splitlines()) if porcelain else 0
     return (
-        f"{name:<{NAME_W}}  "
+        f"{name:<{name_w}}  "
         f"{branch:<{BRANCH_W}}  "
         f"{last:<{LAST_W}}  "
         f"{uncommitted:>{COUNT_W}} uncommitted"
@@ -291,10 +294,12 @@ def refresh(app: rumps.App, also_print: bool) -> None:
 
 def _build_menu(app: rumps.App) -> None:
     app.menu.clear()
-    for repo in discover_repos():
+    repos = discover_repos()
+    name_w = _name_width(repos)
+    for repo in repos:
         app.menu.add(
             _mono_item(
-                repo_summary(repo),
+                repo_summary(repo, name_w),
                 callback=functools.partial(_on_repo_click, repo),
             )
         )
@@ -331,9 +336,9 @@ def _on_pull_update(_: rumps.MenuItem) -> None:
         )
 
 
-def _header() -> str:
+def _header(name_w: int = 12) -> str:
     return (
-        f"{'REPO':<{NAME_W}}  "
+        f"{'REPO':<{name_w}}  "
         f"{'BRANCH':<{BRANCH_W}}  "
         f"{'LAST COMMIT':<{LAST_W}}  "
         f"UNCOMMITTED"
@@ -341,11 +346,13 @@ def _header() -> str:
 
 
 def _print_cli_table(interval: int = CONFIG.refresh_seconds) -> None:
+    repos = discover_repos()
+    name_w = _name_width(repos)
     print("\033[2J\033[H", end="")
-    print(_header())
-    print("-" * len(_header()))
-    for repo in discover_repos():
-        print(repo_summary(repo))
+    print(_header(name_w))
+    print("-" * len(_header(name_w)))
+    for repo in repos:
+        print(repo_summary(repo, name_w))
     print()
     print(
         f"Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  "
