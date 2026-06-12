@@ -2,33 +2,140 @@
 
 from __future__ import annotations
 
+import functools
+import json
+import os
 import re
 import subprocess
 import sys
 import time
+import tomllib
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
 import rumps
 from AppKit import NSAttributedString, NSFont, NSFontAttributeName
 
-DEV_DIRS = [
-    Path.home() / "dev",
-    Path.home() / "dev2",
-]
-_REPO_RE = re.compile(r"^playmaker\d*$")
-REFRESH_SECONDS = 60
+CONFIG_PATH = Path.home() / ".config" / "playmaker-status" / "config.toml"
+
+DEFAULTS = {
+    "scan_dirs": ["~/dev", "~/dev2"],
+    "repo_pattern": r"playmaker\d*",
+    "refresh_seconds": 60,
+    "title": "PM",
+}
+
+SAMPLE_CONFIG = r'''# playmaker-status configuration.
+# Restart the app after editing.
+
+# Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
+scan_dirs = ["~/dev", "~/dev2"]
+
+# A directory is shown only if its name FULLY matches this regex.
+repo_pattern = "playmaker\\d*"
+
+# Refresh interval, in seconds.
+refresh_seconds = 60
+
+# Menu-bar title.
+title = "PM"
+'''
+
+
+@dataclass(frozen=True)
+class Config:
+    scan_dirs: list[Path]
+    repo_pattern: re.Pattern
+    refresh_seconds: int
+    title: str
+
+
+def _write_sample_config() -> None:
+    try:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_PATH.write_text(SAMPLE_CONFIG)
+    except OSError:
+        pass
+
+
+def load_config() -> Config:
+    """Load config from CONFIG_PATH, falling back to defaults for missing keys."""
+    raw = dict(DEFAULTS)
+    if CONFIG_PATH.exists():
+        try:
+            with CONFIG_PATH.open("rb") as f:
+                raw.update(tomllib.load(f))
+        except (OSError, tomllib.TOMLDecodeError) as exc:
+            print(f"playmaker-status: ignoring bad config: {exc}", file=sys.stderr)
+    else:
+        _write_sample_config()
+    scan_dirs = [
+        Path(os.path.expandvars(os.path.expanduser(d))) for d in raw["scan_dirs"]
+    ]
+    return Config(
+        scan_dirs=scan_dirs,
+        repo_pattern=re.compile(f"^(?:{raw['repo_pattern']})$"),
+        refresh_seconds=int(raw["refresh_seconds"]),
+        title=str(raw["title"]),
+    )
+
+
+CONFIG = load_config()
 
 
 def discover_repos() -> list[str]:
-    """Scan the dev dirs for playmaker checkouts (playmaker, playmaker2, ...)."""
+    """Scan the configured dirs for repos whose name matches the configured pattern."""
     repos: list[str] = []
-    for root in DEV_DIRS:
+    for root in CONFIG.scan_dirs:
         if not root.is_dir():
             continue
-        matches = [p for p in root.iterdir() if p.is_dir() and _REPO_RE.match(p.name)]
+        matches = [
+            p for p in root.iterdir() if p.is_dir() and CONFIG.repo_pattern.match(p.name)
+        ]
         repos.extend(str(p) for p in sorted(matches, key=lambda p: p.name))
     return repos
+
+
+CMUX_BIN = "/Applications/cmux.app/Contents/Resources/bin/cmux"
+CMUX_BUNDLE_ID = "com.cmuxterm.app"
+
+
+def _cmux(*args: str, timeout: float = 5.0) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [CMUX_BIN, *args], capture_output=True, text=True, timeout=timeout
+    )
+
+
+def _find_workspace(repo: str) -> tuple[str, str | None] | None:
+    """Return (workspace_id, window_id) for the cmux workspace whose cwd is `repo`."""
+    try:
+        result = _cmux("rpc", "workspace.list")
+        data = json.loads(result.stdout)
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+        return None
+    window_id = data.get("window_id")
+    for ws in data.get("workspaces", []):
+        if ws.get("current_directory") == repo and ws.get("id"):
+            return ws["id"], window_id
+    return None
+
+
+def open_in_cmux(repo: str) -> None:
+    """Focus the cmux workspace for `repo`; open it in a new one if none exists."""
+    found = _find_workspace(repo)
+    try:
+        if found:
+            ws_id, window_id = found
+            args = ["select-workspace", "--workspace", ws_id]
+            if window_id:
+                args += ["--window", window_id]
+            _cmux(*args)
+        else:
+            _cmux(repo)  # opens the dir in a new workspace, launching cmux if needed
+    except (subprocess.SubprocessError, OSError):
+        return
+    subprocess.run(["open", "-b", CMUX_BUNDLE_ID], capture_output=True)
 BRANCH_MAX = 40
 
 NAME_W = 12
@@ -87,10 +194,10 @@ def _mono_item(text: str, callback=None) -> rumps.MenuItem:
 
 class PlaymakerStatusApp(rumps.App):
     def __init__(self, also_print: bool = True) -> None:
-        super().__init__("PM", quit_button=None)
+        super().__init__(CONFIG.title, quit_button=None)
         self._also_print = also_print
         self._refresh()
-        self._timer = rumps.Timer(self._on_tick, REFRESH_SECONDS)
+        self._timer = rumps.Timer(self._on_tick, CONFIG.refresh_seconds)
         self._timer.start()
 
     def _refresh(self) -> None:
@@ -101,7 +208,12 @@ class PlaymakerStatusApp(rumps.App):
     def _build_menu(self) -> None:
         self.menu.clear()
         for repo in discover_repos():
-            self.menu.add(_mono_item(repo_summary(repo)))
+            self.menu.add(
+                _mono_item(
+                    repo_summary(repo),
+                    callback=functools.partial(self._on_repo_click, repo),
+                )
+            )
         self.menu.add(rumps.separator)
         self.menu.add(
             rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
@@ -115,6 +227,9 @@ class PlaymakerStatusApp(rumps.App):
     def _on_refresh(self, _: rumps.MenuItem) -> None:
         self._refresh()
 
+    def _on_repo_click(self, repo: str, _: rumps.MenuItem) -> None:
+        open_in_cmux(repo)
+
 
 def _header() -> str:
     return (
@@ -125,7 +240,7 @@ def _header() -> str:
     )
 
 
-def _print_cli_table(interval: int = REFRESH_SECONDS) -> None:
+def _print_cli_table(interval: int = CONFIG.refresh_seconds) -> None:
     print("\033[2J\033[H", end="")
     print(_header())
     print("-" * len(_header()))
@@ -139,7 +254,7 @@ def _print_cli_table(interval: int = REFRESH_SECONDS) -> None:
     sys.stdout.flush()
 
 
-def cli_loop(interval: int = REFRESH_SECONDS) -> None:
+def cli_loop(interval: int = CONFIG.refresh_seconds) -> None:
     try:
         while True:
             _print_cli_table(interval)
