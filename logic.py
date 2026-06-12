@@ -32,30 +32,51 @@ DEFAULTS = {
     "title": "RG",
     "sort": "name",
     "active_days": 30,
+    "branch_width": 25,
 }
 
-SAMPLE_CONFIG = r'''# repo-glance configuration.
-# Changes are picked up within a couple of seconds — no restart needed.
+# Comment block above each key — used for the sample config and for the
+# blocks appended to existing config files when an update adds new keys.
+KEY_COMMENTS = {
+    "scan_dirs": '# Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.',
+    "repo_pattern": (
+        "# A directory is shown if its name FULLY matches any of these regexes.\n"
+        '# A list also works: repo_pattern = ["playmaker\\\\d*", "fastbreak\\\\d*"]'
+    ),
+    "refresh_seconds": (
+        "# Seconds between unconditional full refreshes. Git changes (commits, branch\n"
+        "# switches, staging) and config edits are detected within ~2s regardless; this\n"
+        "# interval is the backstop that also catches unstaged working-tree edits."
+    ),
+    "title": "# Menu-bar title.",
+    "sort": (
+        '# Order repos are listed in: "name" (default, grouped by scan dir),\n'
+        '# "oldest" (oldest last commit first), or "newest" (most recent first).'
+    ),
+    "active_days": (
+        "# Hide repos whose last commit is older than this many days. 0 shows all."
+    ),
+    "branch_width": (
+        '# Branch column width; longer branch names are truncated with "...".'
+    ),
+}
 
-# Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
-scan_dirs = ["~/dev", "~/dev2"]
 
-# A directory is shown if its name FULLY matches any of these regexes.
-# A single string also works: repo_pattern = "playmaker\\d*"
-repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
+def _toml_value(value) -> str:
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    return json.dumps(value)  # JSON strings/ints are valid TOML
 
-# Seconds between unconditional full refreshes. Git changes (commits, branch
-# switches, staging) and config edits are detected within ~2s regardless; this
-# interval is the backstop that also catches unstaged working-tree edits.
-refresh_seconds = 60
 
-# Menu-bar title.
-title = "RG"
+def _key_block(key: str) -> str:
+    return f"{KEY_COMMENTS[key]}\n{key} = {_toml_value(DEFAULTS[key])}\n"
 
-# Order repos are listed in: "name" (default, grouped by scan dir),
-# "oldest" (oldest last commit first), or "newest" (most recent first).
-sort = "name"
-'''
+
+SAMPLE_CONFIG = (
+    "# repo-glance configuration.\n"
+    "# Changes are picked up within a couple of seconds — no restart needed.\n\n"
+    + "\n".join(_key_block(k) for k in DEFAULTS)
+)
 
 
 @dataclass(frozen=True)
@@ -66,6 +87,7 @@ class Config:
     title: str
     sort: str
     active_days: int
+    branch_width: int
 
 
 def _write_sample_config() -> None:
@@ -76,13 +98,28 @@ def _write_sample_config() -> None:
         pass
 
 
+def _append_missing_keys(parsed: dict) -> None:
+    """Append commented default blocks for keys the user's config file doesn't
+    have yet, so options added by software updates become visible."""
+    missing = [k for k in DEFAULTS if k not in parsed]
+    if not missing:
+        return
+    try:
+        with CONFIG_PATH.open("a") as f:
+            f.write("\n" + "\n".join(_key_block(k) for k in missing))
+    except OSError:
+        pass
+
+
 def load_config() -> Config:
     """Load config from CONFIG_PATH, falling back to defaults for missing keys."""
     raw = dict(DEFAULTS)
     if CONFIG_PATH.exists():
         try:
             with CONFIG_PATH.open("rb") as f:
-                raw.update(tomllib.load(f))
+                parsed = tomllib.load(f)
+            raw.update(parsed)
+            _append_missing_keys(parsed)
         except (OSError, tomllib.TOMLDecodeError) as exc:
             print(f"repo-glance: ignoring bad config: {exc}", file=sys.stderr)
     else:
@@ -101,6 +138,7 @@ def load_config() -> Config:
         title=str(raw["title"]),
         sort=str(raw["sort"]),
         active_days=int(raw["active_days"]),
+        branch_width=int(raw["branch_width"]),
     )
 
 
@@ -232,9 +270,6 @@ def open_in_cmux(repo: str) -> None:
     subprocess.run(["open", "-b", CMUX_BUNDLE_ID], capture_output=True)
 
 
-BRANCH_MAX = 25
-
-BRANCH_W = BRANCH_MAX
 LAST_W = 7
 COUNT_W = 3
 
@@ -265,14 +300,15 @@ def repo_summary(info: RepoInfo, name_w: int = 12) -> str:
     name = Path(info.repo).name
     if not info.is_git:
         return f"{name:<{name_w}}  (not a git repo)"
+    branch_w = CONFIG.branch_width
     branch = info.branch
-    if len(branch) > BRANCH_MAX:
-        branch = branch[: BRANCH_MAX - 3] + "..."
+    if len(branch) > branch_w:
+        branch = branch[: branch_w - 3] + "..."
     last = _relative_days(info.last_iso) if info.last_iso else "-"
     dirty = f"~{info.uncommitted}" if info.uncommitted else ""
     return (
         f"{name:<{name_w}}  "
-        f"{branch:<{BRANCH_W}}  "
+        f"{branch:<{branch_w}}  "
         f"{last:<{LAST_W}}  "
         f"{dirty}"
     )
@@ -404,7 +440,7 @@ def _on_pull_update(_: rumps.MenuItem) -> None:
 def _header(name_w: int = 12) -> str:
     return (
         f"{'REPO':<{name_w}}  "
-        f"{'BRANCH':<{BRANCH_W}}  "
+        f"{'BRANCH':<{CONFIG.branch_width}}  "
         f"{'AGE':<{LAST_W}}  "
         f"DIRTY"
     )
