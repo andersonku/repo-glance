@@ -269,7 +269,7 @@ def repo_summary(info: RepoInfo, name_w: int = 12) -> str:
     if len(branch) > BRANCH_MAX:
         branch = branch[: BRANCH_MAX - 3] + "..."
     last = _relative_days(info.last_iso) if info.last_iso else "-"
-    dirty = f"{info.uncommitted:>{COUNT_W}} !" if info.uncommitted else ""
+    dirty = f"~{info.uncommitted}" if info.uncommitted else ""
     return (
         f"{name:<{name_w}}  "
         f"{branch:<{BRANCH_W}}  "
