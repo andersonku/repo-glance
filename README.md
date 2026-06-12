@@ -65,14 +65,16 @@ On first run, a commented sample is written to `~/.config/repo-glance/config.tom
 | `repo_pattern` | `"playmaker\\d*"` | A regex **string**, or a **list** of regexes. A directory is shown if its name *fully* matches any of them. |
 | `refresh_seconds` | `60` | How often the status refreshes. |
 | `title` | `"RG"` | The menu-bar title. |
+| `sort` | `"name"` | Listing order: `"name"` (grouped by scan dir), `"oldest"` (oldest last commit first), or `"newest"` (most recent first). |
 
-Example with multiple patterns:
+Example with multiple patterns, oldest commits first:
 
 ```toml
 scan_dirs = ["~/dev", "~/dev2", "~/work/$USER/projects"]
 repo_pattern = ["playmaker\\d*", "fastbreak\\d*"]
 refresh_seconds = 60
 title = "RG"
+sort = "oldest"
 ```
 
 Notes:

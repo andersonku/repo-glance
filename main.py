@@ -24,6 +24,7 @@ DEFAULTS = {
     "repo_pattern": r"playmaker\d*",
     "refresh_seconds": 60,
     "title": "RG",
+    "sort": "name",
 }
 
 SAMPLE_CONFIG = r'''# repo-glance configuration.
@@ -41,6 +42,10 @@ refresh_seconds = 60
 
 # Menu-bar title.
 title = "RG"
+
+# Order repos are listed in: "name" (default, grouped by scan dir),
+# "oldest" (oldest last commit first), or "newest" (most recent first).
+sort = "name"
 '''
 
 
@@ -50,6 +55,7 @@ class Config:
     repo_pattern: re.Pattern
     refresh_seconds: int
     title: str
+    sort: str
 
 
 def _write_sample_config() -> None:
@@ -83,10 +89,16 @@ def load_config() -> Config:
         repo_pattern=re.compile(f"^(?:{combined})$"),
         refresh_seconds=int(raw["refresh_seconds"]),
         title=str(raw["title"]),
+        sort=str(raw["sort"]),
     )
 
 
 CONFIG = load_config()
+
+
+def _last_commit_epoch(repo: str) -> int:
+    out = _git(repo, "log", "-1", "--format=%ct")
+    return int(out) if out.isdigit() else 0
 
 
 def discover_repos() -> list[str]:
@@ -99,6 +111,8 @@ def discover_repos() -> list[str]:
             p for p in root.iterdir() if p.is_dir() and CONFIG.repo_pattern.match(p.name)
         ]
         repos.extend(str(p) for p in sorted(matches, key=lambda p: p.name))
+    if CONFIG.sort in ("oldest", "newest"):
+        repos.sort(key=_last_commit_epoch, reverse=CONFIG.sort == "newest")
     return repos
 
 
