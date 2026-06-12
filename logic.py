@@ -191,7 +191,12 @@ def open_in_cmux(repo: str) -> None:
                 args += ["--window", window_id]
             _cmux(*args)
         else:
-            _cmux(repo)  # opens the dir in a new workspace, launching cmux if needed
+            # new-workspace --focus selects the new workspace; the bare-path
+            # form doesn't. It needs cmux running, so fall back to the bare
+            # form (which launches cmux) if it fails.
+            result = _cmux("new-workspace", "--cwd", repo, "--focus", "true")
+            if result.returncode != 0:
+                _cmux(repo)
     except (subprocess.SubprocessError, OSError):
         return
     subprocess.run(["open", "-b", CMUX_BUNDLE_ID], capture_output=True)
