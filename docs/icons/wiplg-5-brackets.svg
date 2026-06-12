@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 18" width="42" height="18">
+  <text x="21" y="14" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="14" fill="#000">WIP</text>
+  <g stroke="#000" stroke-width="2" fill="none" stroke-linecap="square">
+    <path d="M5 2.5 H1.5 V15.5 H5"/>
+    <path d="M37 2.5 H40.5 V15.5 H37"/>
+  </g>
+</svg>

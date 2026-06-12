@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="340" viewBox="0 0 1000 340">
+<rect width="1000" height="170" fill="#ececec"/>
+<rect y="170" width="1000" height="170" fill="#1e1e1e"/>
+<g transform="translate(28.0,22) scale(4)">
+  <text x="18" y="14.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="15" letter-spacing="-0.3" fill="#000">WIP</text>
+
+</g>
+<g transform="translate(82.0,118)">
+  <text x="18" y="14.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="15" letter-spacing="-0.3" fill="#000">WIP</text>
+
+</g>
+<text x="100.0" y="156" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#333">1. Plain XL</text>
+<g transform="translate(28.0,192) scale(4)">
+  <text x="18" y="14.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="15" letter-spacing="-0.3" fill="#fff">WIP</text>
+
+</g>
+<g transform="translate(82.0,288)">
+  <text x="18" y="14.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="15" letter-spacing="-0.3" fill="#fff">WIP</text>
+
+</g>
+<text x="100.0" y="326" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#ccc">1. Plain XL</text>
+<g transform="translate(236.0,22) scale(4)">
+  <text x="16" y="15.2" text-anchor="middle" font-family="Helvetica Neue" font-weight="900" font-stretch="condensed" font-size="16.5" fill="#000">WIP</text>
+
+</g>
+<g transform="translate(284.0,118)">
+  <text x="16" y="15.2" text-anchor="middle" font-family="Helvetica Neue" font-weight="900" font-stretch="condensed" font-size="16.5" fill="#000">WIP</text>
+
+</g>
+<text x="300.0" y="156" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#333">2. Condensed Black</text>
+<g transform="translate(236.0,192) scale(4)">
+  <text x="16" y="15.2" text-anchor="middle" font-family="Helvetica Neue" font-weight="900" font-stretch="condensed" font-size="16.5" fill="#fff">WIP</text>
+
+</g>
+<g transform="translate(284.0,288)">
+  <text x="16" y="15.2" text-anchor="middle" font-family="Helvetica Neue" font-weight="900" font-stretch="condensed" font-size="16.5" fill="#fff">WIP</text>
+
+</g>
+<text x="300.0" y="326" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#ccc">2. Condensed Black</text>
+<g transform="translate(424.0,22) scale(4)">
+  <mask id="knockout-2-0b">
+    <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="white"/>
+    <text x="19" y="13.7" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13" fill="black">WIP</text>
+  </mask>
+  <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="#000" mask="url(#knockout-2-0b)"/>
+
+</g>
+<g transform="translate(481.0,118)">
+  <mask id="knockout-2-0s">
+    <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="white"/>
+    <text x="19" y="13.7" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13" fill="black">WIP</text>
+  </mask>
+  <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="#000" mask="url(#knockout-2-0s)"/>
+
+</g>
+<text x="500.0" y="156" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#333">3. Solid badge XL</text>
+<g transform="translate(424.0,192) scale(4)">
+  <mask id="knockout-2-1b">
+    <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="white"/>
+    <text x="19" y="13.7" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13" fill="black">WIP</text>
+  </mask>
+  <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="#fff" mask="url(#knockout-2-1b)"/>
+
+</g>
+<g transform="translate(481.0,288)">
+  <mask id="knockout-2-1s">
+    <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="white"/>
+    <text x="19" y="13.7" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13" fill="black">WIP</text>
+  </mask>
+  <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="#fff" mask="url(#knockout-2-1s)"/>
+
+</g>
+<text x="500.0" y="326" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#ccc">3. Solid badge XL</text>
+<g transform="translate(628.0,22) scale(4)">
+  <text x="18" y="13" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13.5" fill="#000">WIP</text>
+  <rect x="3" y="15" width="30" height="2.4" rx="1.2" fill="#000"/>
+
+</g>
+<g transform="translate(682.0,118)">
+  <text x="18" y="13" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13.5" fill="#000">WIP</text>
+  <rect x="3" y="15" width="30" height="2.4" rx="1.2" fill="#000"/>
+
+</g>
+<text x="700.0" y="156" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#333">4. Underline</text>
+<g transform="translate(628.0,192) scale(4)">
+  <text x="18" y="13" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13.5" fill="#fff">WIP</text>
+  <rect x="3" y="15" width="30" height="2.4" rx="1.2" fill="#fff"/>
+
+</g>
+<g transform="translate(682.0,288)">
+  <text x="18" y="13" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13.5" fill="#fff">WIP</text>
+  <rect x="3" y="15" width="30" height="2.4" rx="1.2" fill="#fff"/>
+
+</g>
+<text x="700.0" y="326" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#ccc">4. Underline</text>
+<g transform="translate(816.0,22) scale(4)">
+  <text x="21" y="14" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="14" fill="#000">WIP</text>
+  <g stroke="#000" stroke-width="2" fill="none" stroke-linecap="square">
+    <path d="M5 2.5 H1.5 V15.5 H5"/>
+    <path d="M37 2.5 H40.5 V15.5 H37"/>
+  </g>
+
+</g>
+<g transform="translate(879.0,118)">
+  <text x="21" y="14" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="14" fill="#000">WIP</text>
+  <g stroke="#000" stroke-width="2" fill="none" stroke-linecap="square">
+    <path d="M5 2.5 H1.5 V15.5 H5"/>
+    <path d="M37 2.5 H40.5 V15.5 H37"/>
+  </g>
+
+</g>
+<text x="900.0" y="156" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#333">5. Brackets</text>
+<g transform="translate(816.0,192) scale(4)">
+  <text x="21" y="14" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="14" fill="#fff">WIP</text>
+  <g stroke="#fff" stroke-width="2" fill="none" stroke-linecap="square">
+    <path d="M5 2.5 H1.5 V15.5 H5"/>
+    <path d="M37 2.5 H40.5 V15.5 H37"/>
+  </g>
+
+</g>
+<g transform="translate(879.0,288)">
+  <text x="21" y="14" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="14" fill="#fff">WIP</text>
+  <g stroke="#fff" stroke-width="2" fill="none" stroke-linecap="square">
+    <path d="M5 2.5 H1.5 V15.5 H5"/>
+    <path d="M37 2.5 H40.5 V15.5 H37"/>
+  </g>
+
+</g>
+<text x="900.0" y="326" text-anchor="middle" font-family="Helvetica" font-size="12" fill="#ccc">5. Brackets</text>
+</svg>

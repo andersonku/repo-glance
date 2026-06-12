@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 18" width="38" height="18">
+  <mask id="knockout">
+    <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="white"/>
+    <text x="19" y="13.7" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="13" fill="black">WIP</text>
+  </mask>
+  <rect x="0.5" y="0.5" width="37" height="17" rx="4.5" fill="#000" mask="url(#knockout)"/>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 18" width="34" height="18">
+  <path d="M8.5 3 H31 a1.5 1.5 0 0 1 1.5 1.5 v9 a1.5 1.5 0 0 1 -1.5 1.5 H8.5 L1.5 9 Z"
+        stroke="#000" stroke-width="1.5" fill="none" stroke-linejoin="round"/>
+  <circle cx="7.6" cy="9" r="1.2" fill="#000"/>
+  <text x="21" y="12.4" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="9" fill="#000">WIP</text>
+</svg>

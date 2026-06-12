@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46 18" width="46" height="18">
+  <defs>
+    <clipPath id="pill"><rect x="0.75" y="0.75" width="44.5" height="16.5" rx="8.25"/></clipPath>
+    <clipPath id="rightpart"><rect x="27" y="0" width="19" height="18"/></clipPath>
+    <mask id="fillm">
+      <rect x="0" y="0" width="27" height="18" fill="white"/>
+      <text x="23" y="13.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="12.5" fill="black">WIP</text>
+    </mask>
+  </defs>
+  <rect x="0" y="0" width="27" height="18" clip-path="url(#pill)" mask="url(#fillm)" fill="#000"/>
+  <g clip-path="url(#rightpart)">
+    <text x="23" y="13.6" text-anchor="middle" font-family="Helvetica" font-weight="bold" font-size="12.5" fill="#000">WIP</text>
+  </g>
+  <rect x="0.75" y="0.75" width="44.5" height="16.5" rx="8.25" stroke="#000" stroke-width="1.5" fill="none"/>
+</svg>
