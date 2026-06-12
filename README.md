@@ -57,7 +57,7 @@ The menu bar shows a short title (default `PM`); click it to see the per-repo st
 
 ## Configuration
 
-On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. Edit it and **restart the app** to apply changes.
+On first run, a commented sample is written to `~/.config/repo-glance/config.toml`. The file is **re-read on every refresh**, so edits (including the menu title and refresh interval) take effect on the next refresh — no restart needed.
 
 | Key | Default | Description |
 | --- | --- | --- |

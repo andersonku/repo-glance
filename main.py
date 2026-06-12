@@ -28,7 +28,7 @@ DEFAULTS = {
 }
 
 SAMPLE_CONFIG = r'''# repo-glance configuration.
-# Restart the app after editing.
+# Changes are picked up on the next refresh — no restart needed.
 
 # Folders to scan for repo checkouts. "~" and $ENV_VARS are expanded.
 scan_dirs = ["~/dev", "~/dev2"]
@@ -215,14 +215,21 @@ class PlaymakerStatusApp(rumps.App):
     def __init__(self, also_print: bool = True) -> None:
         super().__init__(CONFIG.title, quit_button=None)
         self._also_print = also_print
-        self._refresh()
         self._timer = rumps.Timer(self._on_tick, CONFIG.refresh_seconds)
+        self._refresh()
         self._timer.start()
 
     def _refresh(self) -> None:
+        global CONFIG
+        CONFIG = load_config()
+        self.title = CONFIG.title
+        if self._timer.interval != CONFIG.refresh_seconds:
+            self._timer.stop()
+            self._timer.interval = CONFIG.refresh_seconds
+            self._timer.start()
         self._build_menu()
         if self._also_print:
-            _print_cli_table()
+            _print_cli_table(CONFIG.refresh_seconds)
 
     def _build_menu(self) -> None:
         self.menu.clear()
@@ -273,11 +280,13 @@ def _print_cli_table(interval: int = CONFIG.refresh_seconds) -> None:
     sys.stdout.flush()
 
 
-def cli_loop(interval: int = CONFIG.refresh_seconds) -> None:
+def cli_loop() -> None:
+    global CONFIG
     try:
         while True:
-            _print_cli_table(interval)
-            time.sleep(interval)
+            CONFIG = load_config()
+            _print_cli_table(CONFIG.refresh_seconds)
+            time.sleep(CONFIG.refresh_seconds)
     except KeyboardInterrupt:
         print()
 
