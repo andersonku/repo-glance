@@ -7,6 +7,7 @@ import functools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -33,6 +34,7 @@ DEFAULTS = {
     "sort": "name",
     "active_days": 30,
     "branch_width": 25,
+    "show_pr": True,
     "icon": "",
 }
 
@@ -59,6 +61,10 @@ KEY_COMMENTS = {
     ),
     "branch_width": (
         '# Branch column width; longer branch names are truncated with "...".'
+    ),
+    "show_pr": (
+        "# Show an indented, clickable PR line under each repo whose branch has a\n"
+        "# pull request (resolved via the gh CLI)."
     ),
     "icon": (
         "# Path to a .png/.svg file shown as the menu-bar icon instead of the title\n"
@@ -93,6 +99,7 @@ class Config:
     sort: str
     active_days: int
     branch_width: int
+    show_pr: bool
     icon: str
 
 
@@ -145,6 +152,7 @@ def load_config() -> Config:
         sort=str(raw["sort"]),
         active_days=int(raw["active_days"]),
         branch_width=int(raw["branch_width"]),
+        show_pr=bool(raw["show_pr"]),
         icon=os.path.expandvars(os.path.expanduser(str(raw["icon"]))),
     )
 
@@ -393,10 +401,59 @@ def refresh(app: rumps.App, also_print: bool) -> None:
         _print_cli_table(CONFIG.refresh_seconds)
 
 
+# gh lives in /opt/homebrew/bin, which isn't on PATH when launched as an app.
+GH_BIN = shutil.which("gh") or "/opt/homebrew/bin/gh"
+
+PR_TITLE_W = 50  # PR titles longer than this are truncated with "..."
+
+
+def _pr_lookup(repo: str) -> dict | None:
+    """PR for the repo's current branch via `gh pr view` (resolves the branch
+    itself). None if there is no PR, gh is missing, or gh isn't authed."""
+    try:
+        result = subprocess.run(
+            [GH_BIN, "pr", "view", "--json", "number,url,title"],
+            cwd=repo, capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        return json.loads(result.stdout)
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError):
+        return None
+
+
+def _pr_map(app: rumps.App, infos: list[RepoInfo]) -> dict[str, dict | None]:
+    """repo -> PR info for the branch it is on. Lookups hit the network, so
+    results are cached by (repo, branch) on the app object (survives reloads)
+    and re-checked at most every FETCH_SECONDS — which also picks up PRs
+    opened after a branch was first seen."""
+    cache = getattr(app, "_rg_pr_cache", None)
+    if cache is None:
+        cache = app._rg_pr_cache = {}
+    now = time.monotonic()
+    targets = [i for i in infos if i.is_git and i.branch]
+    stale = [
+        i for i in targets
+        if (i.repo, i.branch) not in cache
+        or now - cache[(i.repo, i.branch)][0] >= FETCH_SECONDS
+    ]
+    if stale:
+        with ThreadPoolExecutor(max_workers=16) as ex:
+            results = list(ex.map(lambda i: _pr_lookup(i.repo), stale))
+        for info, pr in zip(stale, results):
+            cache[(info.repo, info.branch)] = (now, pr)
+    return {i.repo: cache[(i.repo, i.branch)][1] for i in targets}
+
+
+def _on_open_url(url: str, _: rumps.MenuItem) -> None:
+    subprocess.run(["open", url], capture_output=True)
+
+
 def _build_menu(app: rumps.App) -> None:
     app.menu.clear()
     infos = discover_repos()
     name_w = _name_width(infos)
+    prs = _pr_map(app, infos) if CONFIG.show_pr else {}
     for info in infos:
         app.menu.add(
             _mono_item(
@@ -404,11 +461,29 @@ def _build_menu(app: rumps.App) -> None:
                 callback=functools.partial(_on_repo_click, info.repo),
             )
         )
+        pr = prs.get(info.repo)
+        if pr:
+            # Explicit key: rumps keys items by title and silently drops
+            # duplicates, which would hide the PR row of a second checkout
+            # on the same branch.
+            title = pr.get("title", "")
+            if len(title) > PR_TITLE_W:
+                title = title[: PR_TITLE_W - 3] + "..."
+            app.menu[f"{info.repo}:pr"] = _mono_item(
+                f"   ↳ PR #{pr['number']}  {title}",
+                callback=functools.partial(_on_open_url, pr["url"]),
+            )
     app.menu.add(rumps.separator)
     app.menu.add(
         rumps.MenuItem(f"Refreshed {datetime.now().strftime('%H:%M:%S')}")
     )
     app.menu.add(rumps.MenuItem("Refresh now", callback=app._on_refresh))
+    app.menu.add(
+        rumps.MenuItem(
+            "Hide PRs" if CONFIG.show_pr else "Show PRs",
+            callback=functools.partial(_on_toggle_pr, app),
+        )
+    )
     app.menu.add(rumps.MenuItem("Edit config", callback=_on_edit_config))
     behind = _commits_behind(app)
     gh_title = f"Open GitHub ({behind} behind)" if behind else "Open GitHub"
@@ -448,6 +523,21 @@ def _commits_behind(app: rumps.App) -> int:
 
 def _on_open_github(_: rumps.MenuItem) -> None:
     subprocess.run(["open", GITHUB_URL], capture_output=True)
+
+
+def _on_toggle_pr(app: rumps.App, _: rumps.MenuItem) -> None:
+    """Flip show_pr in the config file (so the choice persists), then refresh.
+    The app is config-driven, so writing the file IS the toggle mechanism."""
+    new = "false" if CONFIG.show_pr else "true"
+    try:
+        text = CONFIG_PATH.read_text() if CONFIG_PATH.exists() else SAMPLE_CONFIG
+        text, n = re.subn(r"(?m)^show_pr\s*=.*$", f"show_pr = {new}", text)
+        if not n:
+            text += f"\n{KEY_COMMENTS['show_pr']}\nshow_pr = {new}\n"
+        CONFIG_PATH.write_text(text)
+    except OSError:
+        return
+    app._on_refresh(None)
 
 
 def _on_edit_config(_: rumps.MenuItem) -> None:
