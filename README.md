@@ -53,7 +53,21 @@ uv run main.py           # run it
 | `uv run main.py --no-cli` | Menu-bar app only (no terminal output) — best for running in the background |
 | `uv run main.py --cli` | Terminal table only, no menu-bar icon (handy over SSH / for a first run) |
 
-The menu bar shows a short title (default `PM`); click it to see the per-repo status, a "Refresh now" item, "Pull (update)" (updates the app itself via `git pull`; hot reload applies it within seconds), and "Quit".
+The menu bar shows a short title (default `PM`); click it to see your Claude usage, the per-repo status, a "Refresh now" item, "Pull (update)" (updates the app itself via `git pull`; hot reload applies it within seconds), and "Quit".
+
+### Claude usage row
+
+The first row shows how much of your current Claude 5-hour session limit you've used and when it resets — the same numbers as Claude Code's own `/usage`. Click it to open your usage settings.
+
+It reads Claude Code's OAuth token from the login keychain, so **macOS asks for permission the first time** (choose "Always Allow" to avoid being asked again). repo-glance only reads the token; refreshing it stays Claude Code's job, so if the token has expired the row reads `usage unavailable` until Claude Code next runs. Set `show_usage = false` in the config to hide the row.
+
+The usage endpoint is tightly rate-limited, so it's polled at most once every 5 minutes regardless of how often the rest of the menu refreshes. If a poll fails, the last good reading stays on screen with an "as of" note rather than disappearing:
+
+```
+Claude  ███░░░░░░░   31%   resets 12:35   (as of 08:53)
+```
+
+`usage unavailable` therefore means either that no reading has succeeded yet, or that the 5-hour window rolled over while polls were failing (a percentage from the previous window would be wrong, so it's dropped rather than shown stale).
 
 ### Hot reload
 

@@ -12,6 +12,8 @@ import subprocess
 import sys
 import time
 import tomllib
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -35,6 +37,7 @@ DEFAULTS = {
     "active_days": 30,
     "branch_width": 25,
     "show_pr": True,
+    "show_usage": True,
     "icon": "",
 }
 
@@ -65,6 +68,11 @@ KEY_COMMENTS = {
     "show_pr": (
         "# Show an indented, clickable PR line under each repo whose branch has a\n"
         "# pull request (resolved via the gh CLI)."
+    ),
+    "show_usage": (
+        "# Show a first row with your Claude 5-hour session usage and when it\n"
+        "# resets. Needs a Claude Code login; the token is read from the keychain,\n"
+        "# so macOS asks for permission the first time."
     ),
     "icon": (
         "# Path to a .png/.svg file shown as the menu-bar icon instead of the title\n"
@@ -100,6 +108,7 @@ class Config:
     active_days: int
     branch_width: int
     show_pr: bool
+    show_usage: bool
     icon: str
 
 
@@ -153,6 +162,7 @@ def load_config() -> Config:
         active_days=int(raw["active_days"]),
         branch_width=int(raw["branch_width"]),
         show_pr=bool(raw["show_pr"]),
+        show_usage=bool(raw["show_usage"]),
         icon=os.path.expandvars(os.path.expanduser(str(raw["icon"]))),
     )
 
@@ -449,8 +459,124 @@ def _on_open_url(url: str, _: rumps.MenuItem) -> None:
     subprocess.run(["open", url], capture_output=True)
 
 
+USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+USAGE_SETTINGS_URL = "https://claude.ai/settings/usage"
+# The usage endpoint allows roughly one call every few minutes; a second call
+# 20s after a successful one already 429s. Its 429 carries "Retry-After: 0" and
+# no reset timestamp, so there is nothing useful to back off against — hence a
+# fixed interval, and a failed poll just leaves the last reading up as stale.
+USAGE_SECONDS = 300
+USAGE_BAR_W = 10
+KEYCHAIN_SERVICE = "Claude Code-credentials"
+
+
+def _oauth_token() -> str | None:
+    """Claude Code's OAuth access token, read from the login keychain. None if
+    it's missing or already expired — Claude Code itself owns refreshing it, so
+    a stale token just means no usage row until it next runs."""
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        oauth = json.loads(result.stdout)["claudeAiOauth"]
+    except (subprocess.SubprocessError, OSError, json.JSONDecodeError, KeyError):
+        return None
+    expires = oauth.get("expiresAt")
+    if isinstance(expires, (int, float)) and expires / 1000 <= time.time():
+        return None
+    return oauth.get("accessToken")
+
+
+def _usage_lookup() -> tuple[int, datetime] | None:
+    """(percent used, local reset time) for the current 5-hour session limit —
+    the same numbers Claude Code's own /usage shows. None on any failure."""
+    token = _oauth_token()
+    if not token:
+        return None
+    request = urllib.request.Request(
+        USAGE_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "anthropic-beta": "oauth-2025-04-20",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            data = json.loads(response.read())
+    except (urllib.error.URLError, json.JSONDecodeError, OSError, ValueError):
+        return None
+    # The "limits" list is the current shape; "five_hour" is the older
+    # equivalent, kept as a fallback in case one of them goes away.
+    session = next(
+        (x for x in data.get("limits") or [] if x.get("kind") == "session"), None
+    ) or data.get("five_hour") or {}
+    percent = session.get("percent", session.get("utilization"))
+    resets = session.get("resets_at")
+    if percent is None or not resets:
+        return None
+    try:
+        when = datetime.fromisoformat(resets).astimezone()
+    except ValueError:
+        return None
+    return round(percent), when
+
+
+def _usage(app: rumps.App) -> tuple[int, datetime, datetime, bool] | None:
+    """(percent, reset time, when it was read, stale) for the 5-hour session limit.
+
+    The endpoint is tightly rate-limited, so it's polled at most once per
+    USAGE_SECONDS and a failed poll (429, expired token, no network) keeps
+    returning the last good reading, flagged stale, rather than blanking the
+    row — the same fallback Claude Code's own /usage uses. `stale` tracks the
+    last poll's outcome rather than the reading's age, so a 429 is reflected
+    immediately instead of after the reading happens to get old enough. State
+    lives on the app object so it survives module reloads.
+    """
+    state = getattr(app, "_rg_usage", (None, None, True))
+    if len(state) != 3 or (state[1] is not None and len(state[1]) != 3):
+        state = (None, None, True)  # state from an older build; re-poll
+    attempted, reading, polled_ok = state
+    now = time.monotonic()
+    if attempted is None or now - attempted >= USAGE_SECONDS:
+        fresh = _usage_lookup()
+        polled_ok = fresh is not None
+        if fresh:
+            reading = (*fresh, datetime.now().astimezone())
+        app._rg_usage = (now, reading, polled_ok)
+    if not reading:
+        return None
+    # Once the window it described has rolled over, a stale percent is not
+    # merely old, it's wrong — drop it rather than show a number from the
+    # previous session.
+    if reading[1] <= datetime.now().astimezone():
+        app._rg_usage = (app._rg_usage[0], None, polled_ok)
+        return None
+    return (*reading, not polled_ok)
+
+
+def usage_summary(percent: int, resets: datetime, read_at: datetime, stale: bool) -> str:
+    filled = min(USAGE_BAR_W, max(0, round(percent / 100 * USAGE_BAR_W)))
+    bar = "█" * filled + "░" * (USAGE_BAR_W - filled)
+    row = f"Claude  {bar}  {percent:>3}%   resets {resets.strftime('%H:%M')}"
+    if stale:
+        row += f"   (as of {read_at.strftime('%H:%M')})"
+    return row
+
+
 def _build_menu(app: rumps.App) -> None:
     app.menu.clear()
+    if CONFIG.show_usage:
+        usage = _usage(app)
+        app.menu.add(
+            _mono_item(
+                usage_summary(*usage) if usage else "Claude  usage unavailable",
+                callback=functools.partial(_on_open_url, USAGE_SETTINGS_URL),
+            )
+        )
+        app.menu.add(rumps.separator)
     infos = discover_repos()
     name_w = _name_width(infos)
     prs = _pr_map(app, infos) if CONFIG.show_pr else {}
