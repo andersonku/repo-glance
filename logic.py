@@ -422,7 +422,8 @@ def _pr_lookup(repo: str) -> dict | None:
     itself). None if there is no PR, gh is missing, or gh isn't authed."""
     try:
         result = subprocess.run(
-            [GH_BIN, "pr", "view", "--json", "number,url,title"],
+            [GH_BIN, "pr", "view", "--json",
+             "number,url,title,state,isDraft,reviewDecision,statusCheckRollup"],
             cwd=repo, capture_output=True, text=True, timeout=10,
         )
         if result.returncode != 0:
@@ -430,6 +431,40 @@ def _pr_lookup(repo: str) -> dict | None:
         return json.loads(result.stdout)
     except (subprocess.SubprocessError, OSError, json.JSONDecodeError):
         return None
+
+
+_CI_FAILED = {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE"}
+_CI_DONE = _CI_FAILED | {"SUCCESS", "NEUTRAL", "SKIPPED"}
+
+
+def _pr_extra(pr: dict) -> str:
+    """Noteworthy PR state as short labels ("CI failed, Approved"). Quiet
+    states (open, CI green, no review yet) produce nothing."""
+    # Merged PRs report no usable CI status, and review state no longer
+    # matters — "Merged" says it all.
+    if pr.get("state") == "MERGED":
+        return "Merged"
+    labels = []
+    if pr.get("state") == "CLOSED":
+        labels.append("Closed")
+    if pr.get("isDraft"):
+        labels.append("Draft")
+    # Rollup entries are CheckRuns (conclusion, empty until completed) or
+    # commit StatusContexts (state).
+    results = {
+        c.get("conclusion") or c.get("state") or "PENDING"
+        for c in pr.get("statusCheckRollup") or []
+    }
+    if results & _CI_FAILED:
+        labels.append("CI failed")
+    elif results - _CI_DONE:
+        labels.append("CI running")
+    decision = pr.get("reviewDecision")
+    if decision == "APPROVED":
+        labels.append("Approved")
+    elif decision == "CHANGES_REQUESTED":
+        labels.append("Changes requested")
+    return ", ".join(labels)
 
 
 def _pr_map(app: rumps.App, infos: list[RepoInfo]) -> dict[str, dict | None]:
@@ -595,8 +630,9 @@ def _build_menu(app: rumps.App) -> None:
             title = pr.get("title", "")
             if len(title) > PR_TITLE_W:
                 title = title[: PR_TITLE_W - 3] + "..."
+            extra = _pr_extra(pr)
             app.menu[f"{info.repo}:pr"] = _mono_item(
-                f"   ↳ PR #{pr['number']}  {title}",
+                f"   ↳ PR #{pr['number']}  {title}" + (f"  [{extra}]" if extra else ""),
                 callback=functools.partial(_on_open_url, pr["url"]),
             )
     app.menu.add(rumps.separator)
