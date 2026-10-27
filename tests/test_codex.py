@@ -1,4 +1,4 @@
-"""Codex navigation checks; run with python -m unittest test_codex."""
+"""Codex navigation checks."""
 
 import os
 import sqlite3
@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
-import logic
+from rg import codex
 
 
 class CodexNavigationTests(unittest.TestCase):
@@ -40,9 +40,9 @@ class CodexNavigationTests(unittest.TestCase):
             )
 
     def opened_url(self):
-        with patch.object(logic.subprocess, "run") as run:
+        with patch.object(codex.subprocess, "run") as run:
             run.return_value.returncode = 0
-            logic._open_codex_repo(self.repo)
+            codex._open_codex_repo(self.repo)
         self.assertEqual(run.call_args.args[0][0], "open")
         return run.call_args.args[0][1]
 
@@ -68,7 +68,7 @@ class CodexNavigationTests(unittest.TestCase):
         self.insert(path, [(name, self.repo, 20, 0, "vscode") for name in ("a", "z")])
         with sqlite3.connect(path) as connection:
             connection.execute("UPDATE threads SET updated_at_ms = 20900 WHERE id = 'a'")
-        self.assertEqual(logic._latest_codex_thread(self.repo), "a")
+        self.assertEqual(codex._latest_codex_thread(self.repo), "a")
 
     def test_missing_index_opens_new_chat_without_creating_database(self):
         self.assert_new_chat()
@@ -81,7 +81,7 @@ class CodexNavigationTests(unittest.TestCase):
     def test_newest_schema_is_selected_numerically(self):
         self.insert(self.database(9), [("stale", self.repo, 99, 0, "vscode")])
         self.insert(self.database(10), [("current", self.repo, 20, 0, "vscode")])
-        self.assertEqual(logic._latest_codex_thread(self.repo), "current")
+        self.assertEqual(codex._latest_codex_thread(self.repo), "current")
 
     def test_corrupt_or_incompatible_index_falls_back_without_using_stale_chats(self):
         self.insert(self.database(4), [("stale", self.repo, 99, 0, "vscode")])
